@@ -6,7 +6,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
 
     steps:
       - name: Checkout repository
@@ -22,14 +22,29 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
 
       - name: Extract EstatePilot source
+        shell: bash
         run: |
+          set -euo pipefail
           rm -rf source build_app
           mkdir -p source
-          unzip -q "EstatePilot_Phase1_Source (2).zip" -d source
+          ZIP_FILE="$(find . -maxdepth 1 -type f -name 'EstatePilot_Phase1_Source*.zip' | head -n 1)"
+          test -n "$ZIP_FILE"
+          echo "Using source: $ZIP_FILE"
+          unzip -q "$ZIP_FILE" -d source
           test -f source/EstatePilot/pubspec.yaml
           test -f source/EstatePilot/lib/main.dart
+
+      - name: Fix Android-compatible dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          # file_picker 8.x compiles its Android plugin against API 34.
+          # 10.3.3+ switched to Flutter's compileSdk; 11.0.3 keeps the old API used by this app.
+          sed -i -E 's/^([[:space:]]*)file_picker:[[:space:]].*/\1file_picker: ^11.0.3/' source/EstatePilot/pubspec.yaml
+          grep -n 'file_picker:' source/EstatePilot/pubspec.yaml
 
       - name: Create fresh Android project
         run: |
@@ -40,10 +55,11 @@ jobs:
             build_app
 
       - name: Copy EstatePilot files
+        shell: bash
         run: |
+          set -euo pipefail
           rm -rf build_app/lib
           cp -R source/EstatePilot/lib build_app/lib
-
           cp source/EstatePilot/pubspec.yaml build_app/pubspec.yaml
 
           if [ -f "source/EstatePilot/analysis_options.yaml" ]; then
