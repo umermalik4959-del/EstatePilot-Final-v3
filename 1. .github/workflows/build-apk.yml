@@ -3,60 +3,40 @@ name: Build EstatePilot APK
 on:
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
 
-      - name: Setup Java 17
-        uses: actions/setup-java@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          cache: true
 
-      - name: Extract EstatePilot source
+      - name: Extract source
         run: |
-          rm -rf source build_app
-          mkdir -p source
-          unzip -q EstatePilot_Phase1_Source.zip -d source
-          test -f source/EstatePilot/pubspec.yaml
-          test -f source/EstatePilot/lib/main.dart
+          mkdir source
+          unzip -q "EstatePilot_Phase1_Source (2).zip" -d source
 
-      - name: Create fresh Android project
+      - name: Create Flutter project
         run: |
-          flutter create \
-            --platforms=android \
-            --org com.estatepilot \
-            --project-name app \
-            build_app
+          flutter create --platforms=android --org com.estatepilot --project-name app build_app
 
-      - name: Copy EstatePilot source
+      - name: Copy app files
         run: |
           rm -rf build_app/lib
           cp -R source/EstatePilot/lib build_app/lib
+          cp source/EstatePilot/pubspec.yaml build_app/pubspec.yaml
 
           if [ -d "source/EstatePilot/test" ]; then
             rm -rf build_app/test
             cp -R source/EstatePilot/test build_app/test
-          fi
-
-          cp source/EstatePilot/pubspec.yaml build_app/pubspec.yaml
-
-          if [ -f "source/EstatePilot/analysis_options.yaml" ]; then
-            cp source/EstatePilot/analysis_options.yaml build_app/analysis_options.yaml
           fi
 
           if [ -d "source/EstatePilot/android/app/src/main" ]; then
@@ -68,24 +48,16 @@ jobs:
         working-directory: build_app
         run: flutter pub get
 
-      - name: Run tests
+      - name: Test
         working-directory: build_app
         run: flutter test
 
-      - name: Build release APK
+      - name: Build APK
         working-directory: build_app
         run: flutter build apk --release
-
-      - name: Prepare APK
-        run: |
-          cp build_app/build/app/outputs/flutter-apk/app-release.apk EstatePilot.apk
-          test -s EstatePilot.apk
-          ls -lh EstatePilot.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: EstatePilot-APK
-          path: EstatePilot.apk
-          if-no-files-found: error
-          retention-days: 30
+          path: build_app/build/app/outputs/flutter-apk/app-release.apk
