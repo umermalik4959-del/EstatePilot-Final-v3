@@ -30,21 +30,30 @@ jobs:
           set -euo pipefail
           rm -rf source build_app
           mkdir -p source
+
           ZIP_FILE="$(find . -maxdepth 1 -type f -name 'EstatePilot_Phase1_Source*.zip' | head -n 1)"
           test -n "$ZIP_FILE"
+
           echo "Using source: $ZIP_FILE"
           unzip -q "$ZIP_FILE" -d source
+
           test -f source/EstatePilot/pubspec.yaml
           test -f source/EstatePilot/lib/main.dart
 
-      - name: Fix Android-compatible dependencies
+      - name: Patch source for current Flutter
         shell: bash
         run: |
           set -euo pipefail
-          # file_picker 8.x compiles its Android plugin against API 34.
-          # 10.3.3+ switched to Flutter's compileSdk; 11.0.3 keeps the old API used by this app.
+
           sed -i -E 's/^([[:space:]]*)file_picker:[[:space:]].*/\1file_picker: ^11.0.3/' source/EstatePilot/pubspec.yaml
+
+          grep -RIl 'FilePicker\.platform\.' source/EstatePilot/lib | xargs -r sed -i 's/FilePicker\.platform\./FilePicker./g'
+
+          echo "file_picker dependency:"
           grep -n 'file_picker:' source/EstatePilot/pubspec.yaml
+
+          echo "Checking old FilePicker.platform references:"
+          grep -RIn 'FilePicker\.platform\.' source/EstatePilot/lib || true
 
       - name: Create fresh Android project
         run: |
@@ -58,8 +67,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           rm -rf build_app/lib
           cp -R source/EstatePilot/lib build_app/lib
+
           cp source/EstatePilot/pubspec.yaml build_app/pubspec.yaml
 
           if [ -f "source/EstatePilot/analysis_options.yaml" ]; then
